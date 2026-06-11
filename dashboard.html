@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tuxera — Marketing Inventory v43</title>
+<title>Tuxera — Marketing Inventory v44</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -804,7 +804,7 @@ td.url-cell {
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-logo">Tuxera<span>.</span></div>
-  <div class="topbar-sub">Marketing Inventory v43</div>
+  <div class="topbar-sub">Marketing Inventory v44</div>
   <div class="topbar-actions">
     <span id="sixsenseStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
     <span id="autoStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
@@ -2048,62 +2048,30 @@ async function sendToTeams(text) {
   const staleHigh = pages.filter(p=>ageInfo(p.lastmod).days>=180&&getMeta(p.url).priority==='High');
   const offline = Object.entries(healthResults).filter(([,v])=>v==='down').map(([u])=>u);
 
-  // Build an Adaptive Card for a rich Teams message
-  const card = {
-    type: 'message',
-    attachments: [{
-      contentType: 'application/vnd.microsoft.card.adaptive',
-      content: {
-        '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
-        type: 'AdaptiveCard',
-        version: '1.4',
-        body: [
-          {
-            type: 'TextBlock',
-            text: '🔔 Tuxera Content Inventory Alert',
-            weight: 'Bolder',
-            size: 'Medium',
-            color: 'Attention'
-          },
-          {
-            type: 'TextBlock',
-            text: text,
-            wrap: true,
-            spacing: 'Medium'
-          },
-          {
-            type: 'FactSet',
-            spacing: 'Medium',
-            facts: [
-              { title: 'Stale high-priority pages', value: String(staleHigh.length) },
-              { title: 'Offline pages', value: offline.length ? String(offline.length) : 'None detected' },
-              { title: 'Generated', value: new Date().toLocaleString() },
-            ]
-          }
-        ],
-        actions: [{
-          type: 'Action.OpenUrl',
-          title: 'Open Inventory Dashboard',
-          url: 'https://www.tuxera.com'
-        }]
-      }
-    }]
-  };
+  // Send form-encoded so the Zapier Zap parses fields correctly (same format as translation alerts)
+  const params = new URLSearchParams();
+  params.append('title', 'Stale content alert');
+  params.append('team', 'Marketing');
+  params.append('url', 'https://tuxera-main.github.io/tuxera-marketing-dashboard-site/dashboard.html');
+  params.append('message', text + ' Stale high-priority pages: ' + staleHigh.length + '. Offline pages: ' + (offline.length || 'none') + '.');
+  params.append('alert_type', 'stale_content');
 
-  try {
-    out.innerHTML = '<em style="color:var(--ink3)">📤 Sending to Teams…</em>';
-    await fetch(TEAMS_WEBHOOK, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(card),
-      mode: 'no-cors'
-    });
-    out.innerHTML = `<div style="color:var(--green);font-weight:500">✅ Alert sent to your Teams channel!</div>
-      <div style="margin-top:8px;font-size:12px;color:var(--ink3)">${text.replace(/\n/g,'<br>')}</div>`;
-  } catch(e) {
-    out.innerHTML = `<div style="color:var(--red)">❌ Failed to send: ${e.message}</div>
-      <div style="margin-top:8px;font-size:12px;color:var(--ink3)">You can copy the message above and paste it manually into Teams.</div>`;
-  }
+  fetch(TEAMS_WEBHOOK, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString()
+  }).then(function() {
+    if (out) {
+      out.style.display = 'block';
+      out.textContent = '✅ Alert sent! ' + text;
+    }
+  }).catch(function(e) {
+    if (out) {
+      out.style.display = 'block';
+      out.textContent = '❌ Failed to send: ' + e.message;
+    }
+  });
 }
 
 
@@ -2659,7 +2627,7 @@ function downloadDashboard() {
   const blob = new Blob([document.documentElement.outerHTML], {type: 'text/html'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'tuxera_marketing_dashboard_v43.html';
+  a.download = 'tuxera_marketing_dashboard_v44.html';
   a.click();
   URL.revokeObjectURL(a.href);
   showToast('✅ Dashboard downloaded!');
