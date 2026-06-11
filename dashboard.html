@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tuxera — Marketing Inventory v44</title>
+<title>Tuxera — Marketing Inventory v45</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -804,7 +804,7 @@ td.url-cell {
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-logo">Tuxera<span>.</span></div>
-  <div class="topbar-sub">Marketing Inventory v44</div>
+  <div class="topbar-sub">Marketing Inventory v45</div>
   <div class="topbar-actions">
     <span id="sixsenseStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
     <span id="autoStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
@@ -2077,7 +2077,7 @@ async function sendToTeams(text) {
 
 // ─── SETTINGS ────────────────────────────────────────────────
 let settings = {
-  enabled: true,
+  enabled: false,
   triggerOnOpen: true,
   triggerSchedule: true,
   triggerOffline: true,
@@ -2627,7 +2627,7 @@ function downloadDashboard() {
   const blob = new Blob([document.documentElement.outerHTML], {type: 'text/html'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'tuxera_marketing_dashboard_v44.html';
+  a.download = 'tuxera_marketing_dashboard_v45.html';
   a.click();
   URL.revokeObjectURL(a.href);
   showToast('✅ Dashboard downloaded!');
