@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tuxera — Marketing Inventory v45</title>
+<title>Tuxera — Marketing Inventory v46</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -804,13 +804,12 @@ td.url-cell {
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-logo">Tuxera<span>.</span></div>
-  <div class="topbar-sub">Marketing Inventory v45</div>
+  <div class="topbar-sub">Marketing Inventory v46</div>
   <div class="topbar-actions">
     <span id="sixsenseStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
     <span id="autoStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
     <button class="btn btn-ghost" onclick="runHealthCheck()">⚡ Health Check</button>
     <button class="btn btn-ghost" onclick="exportCSV()">⬇ Export CSV</button>
-    <button class="btn btn-ghost" onclick="downloadDashboard()" title="Download dashboard as HTML file">⬇ Download Dashboard</button>
     <button class="btn btn-ghost" onclick="runCTAScan()" id="ctaScanBtn" title="Scan all pages for CTA presence">🔍 Scan CTAs</button>
     
     <button class="btn btn-ghost" onclick="document.getElementById('sixsenseInput').click()" title="Load 6Sense intent data">🎯 6Sense</button>
@@ -989,6 +988,20 @@ td.url-cell {
     <button class="drawer-close" onclick="closeSettings()">✕</button>
   </div>
   <div class="drawer-body">
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">🤖 AI model</div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px 14px">
+        <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:8px">Model used for AI features</div>
+        <select id="modelSelect" onchange="saveModel()" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:13px 'DM Sans',sans-serif;background:white;color:var(--ink);outline:none">
+          <option value="claude-opus-4-1-20250805">Claude Opus 4.1 — most capable</option>
+          <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 — best for most tasks</option>
+          <option value="claude-sonnet-4-20250514">Claude Sonnet 4 — older</option>
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — fastest, lowest cost</option>
+        </select>
+        <div style="font-size:11px;color:var(--ink3);margin-top:8px">Saved in your browser. Applies to Page Insight, Refresh Brief, Draft Refresh, and Localisation. If a model name changes, update the list in the code. Check docs.claude.com for current model names.</div>
+      </div>
+    </div>
 
     <div class="drawer-section">
       <div class="drawer-section-title">🤖 Auto-send to Teams</div>
@@ -1941,7 +1954,7 @@ Give a concise marketing assessment (3-4 sentences): Is this page strategically 
   fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+    body:JSON.stringify({model:getModel(),max_tokens:1000,messages:[{role:'user',content:prompt}]})
   }).then(r=>r.json()).then(d=>{
     box.className='';
     if (d.error) { box.className='error'; box.textContent='API Error: ' + d.error.message; return; }
@@ -2002,7 +2015,7 @@ Question: ${q}`;
   fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:fullPrompt}]})
+    body:JSON.stringify({model:getModel(),max_tokens:1000,messages:[{role:'user',content:fullPrompt}]})
   }).then(r=>r.json()).then(d=>{
     if (d.error) { out.className='placeholder'; out.textContent='API Error: ' + d.error.message; return; }
     const text = d.content?.find(b=>b.type==='text')?.text;
@@ -2150,6 +2163,8 @@ function openSettings() {
   const stored = localStorage.getItem('tuxera_ray_webhook') || '';
   const inp = document.getElementById('rayWebhookInput');
   if (inp) inp.value = stored;
+  const ms = document.getElementById('modelSelect');
+  if (ms) ms.value = getModel();
   applySettingsToUI();
   document.getElementById('settingsOverlay').classList.add('open');
   document.getElementById('settingsPanel').classList.add('open');
@@ -2339,6 +2354,20 @@ function checkApiKey() {
   if (!getApiKey()) {
     document.getElementById('apiKeyBanner').style.display = 'flex';
   }
+}
+
+// ─── AI MODEL SELECTION ──────────────────────────────────────
+// Default model. Update this and the <option> list in the settings
+// panel when Anthropic releases newer models. Current names are at
+// docs.claude.com/en/docs/about-claude/models
+const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
+function getModel() {
+  return localStorage.getItem('tuxera_model') || DEFAULT_MODEL;
+}
+function saveModel() {
+  const val = document.getElementById('modelSelect').value;
+  localStorage.setItem('tuxera_model', val);
+  showToast('✅ AI model set — applies to all AI features');
 }
 
 
@@ -2588,7 +2617,7 @@ function runContentTool(mode) {
           'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: getModel(),
           max_tokens: 2000,
           messages: [{ role: 'user', content: prompt }]
         })
@@ -2623,15 +2652,6 @@ function copyContentOutput() {
 
 
 // ─── DOWNLOAD DASHBOARD ──────────────────────────────────────
-function downloadDashboard() {
-  const blob = new Blob([document.documentElement.outerHTML], {type: 'text/html'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'tuxera_marketing_dashboard_v45.html';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  showToast('✅ Dashboard downloaded!');
-}
 
 
 
@@ -2807,7 +2827,7 @@ async function generateLocalisation(lang) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: getModel(),
         max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }]
       })
