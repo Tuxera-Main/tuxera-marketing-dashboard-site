@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tuxera — Marketing Inventory v46</title>
+<title>Tuxera — Marketing Inventory v47</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -804,7 +804,7 @@ td.url-cell {
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-logo">Tuxera<span>.</span></div>
-  <div class="topbar-sub">Marketing Inventory v46</div>
+  <div class="topbar-sub">Marketing Inventory v47</div>
   <div class="topbar-actions">
     <span id="sixsenseStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
     <span id="autoStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
@@ -1084,6 +1084,21 @@ td.url-cell {
         <option value="168">1 week</option>
       </select>
       <div id="snoozeStatus" style="font-size:11px;color:var(--ink3);margin-top:6px"></div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">🆕 New content pings</div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px 14px">
+        <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:4px">🇰🇷 Korea team email ping</div>
+        <div style="font-size:11px;color:var(--ink3);margin-bottom:10px">When new content is detected on tuxera.com, an email is sent to the Korea team automatically via the Zapier hook (alert_type: new_content) so they can request translations here. Requires the dashboard to be open in someone's browser. Use the test button to verify the Zapier flow delivers it.</div>
+        <button class="btn btn-outline" onclick="sendTestKoreaPing()">📧 Send test Korea ping</button>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-top:8px">
+        <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:4px">📨 Ray Chen Teams DM (China)</div>
+        <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">Optional: paste the Power Automate flow URL that DMs Ray on Teams. Saved in this browser only.</div>
+        <input type="text" id="rayWebhookInput" class="drawer-input" placeholder="https://prod-xx.westeurope.logic.azure.com/..." style="width:100%;margin-bottom:8px">
+        <button class="btn btn-outline" onclick="saveRayWebhook(document.getElementById('rayWebhookInput').value.trim())">Save webhook</button>
+      </div>
     </div>
 
     <div class="drawer-section">
@@ -2689,10 +2704,58 @@ function checkForNewContent() {
 
   if (newPages.length > 0) {
     saveKnownUrls();
-    newPages.forEach(p => notifyRayNewContent(p));
+    newPages.forEach(p => {
+      notifyRayNewContent(p);
+      notifyKoreaNewContent(p);
+    });
   } else {
     saveKnownUrls();
   }
+}
+
+// ─── KOREA TEAM NEW CONTENT PING ─────────────────────────────
+// Emails the Korea team (via the existing Zapier hook) whenever new English
+// content appears on tuxera.com, so they can request Korean translations
+// through this dashboard. The Zapier flow routes alert_type=new_content
+// to the Korea team's email addresses.
+const DASHBOARD_URL = 'https://tuxera-main.github.io/tuxera-marketing-dashboard-site/dashboard.html';
+
+async function notifyKoreaNewContent(p, isTest) {
+  const slug = p.url.split('/').filter(Boolean).pop() || p.url;
+  const readableTitle = decodeURIComponent(slug).replace(/-/g, ' ').replace(/_/g, ' ');
+  const section = p.section || 'Page';
+
+  const params = new URLSearchParams();
+  params.append('title', (isTest ? '[TEST] ' : '') + readableTitle);
+  params.append('team', 'Korea');
+  params.append('url', p.url);
+  params.append('message',
+    (isTest ? 'THIS IS A TEST PING — no action needed. ' : '')
+    + 'New content published on tuxera.com (' + section + '): "' + readableTitle + '"'
+    + (p.lastmod ? ', published ' + p.lastmod : '')
+    + '. If this should be localised for Korea, please make a translation request in the Marketing Inventory dashboard: '
+    + DASHBOARD_URL);
+  params.append('alert_type', 'new_content');
+
+  try {
+    await fetch(TEAMS_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    showToast('🇰🇷 Korea team notified of new content: ' + readableTitle);
+  } catch(e) {
+    console.log('Korea ping error:', e.message);
+    showToast('⚠️ Could not send Korea team ping — check Zapier webhook');
+  }
+}
+
+function sendTestKoreaPing() {
+  notifyKoreaNewContent({
+    url: 'https://www.tuxera.com/blog/test-korea-ping/',
+    section: 'Blog Posts',
+    lastmod: new Date().toISOString().slice(0, 10)
+  }, true);
 }
 
 async function notifyRayNewContent(p) {
@@ -2707,10 +2770,11 @@ async function notifyRayNewContent(p) {
     published_date: p.lastmod || 'unknown'
   };
 
-  if (RAY_DM_WEBHOOK) {
+  const rayWebhook = localStorage.getItem('tuxera_ray_webhook') || RAY_DM_WEBHOOK;
+  if (rayWebhook) {
     // Use dedicated Power Automate flow for direct Teams message to Ray
     try {
-      await fetch(RAY_DM_WEBHOOK, {
+      await fetch(rayWebhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -3502,19 +3566,41 @@ const SITEMAPS = [
   'https://www.tuxera.com/whitepapers-sitemap.xml'
 ];
 
+// Fetch a URL through CORS proxies, trying each until one returns real XML.
+// corsproxy.io changed its API format (now requires ?url=), which silently broke
+// sitemap refresh in earlier versions — hence the fallback chain and validation.
+const CORS_PROXIES = [
+  u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)
+];
+
+async function fetchSitemapXml(sitemapUrl) {
+  for (const buildProxy of CORS_PROXIES) {
+    try {
+      const resp = await fetch(buildProxy(sitemapUrl), { cache: 'no-cache' });
+      if (!resp.ok) continue;
+      const xml = await resp.text();
+      // Validate it is actually sitemap XML, not a proxy homepage or error page
+      if (xml && (xml.includes('<urlset') || xml.includes('<sitemapindex'))) return xml;
+    } catch(e) { /* try next proxy */ }
+  }
+  return null;
+}
+
 async function refreshFromSitemapSilent() {
   // Silent background refresh — no button state, only toasts if dates actually changed
   let updated = 0;
+  let fetchFailures = 0;
   const urlMap = {};
   pages.forEach(p => { urlMap[p.url] = p; });
 
+  const sitemapCache = {};
   for (const sitemapUrl of SITEMAPS) {
     try {
-      const sProxy = 'https://corsproxy.io/?' + encodeURIComponent(sitemapUrl);
-      const resp = await fetch(sProxy, { cache: 'no-cache' });
-      if (!resp.ok) continue;
-      const xml = await resp.text();
-      if (!xml) continue;
+      const xml = await fetchSitemapXml(sitemapUrl);
+      if (!xml) { fetchFailures++; continue; }
+      sitemapCache[sitemapUrl] = xml;
       const parser = new DOMParser();
       const doc = parser.parseFromString(xml, 'text/xml');
       doc.querySelectorAll('url').forEach(urlEl => {
@@ -3532,10 +3618,7 @@ async function refreshFromSitemapSilent() {
   let added = 0;
   for (const sitemapUrl of SITEMAPS) {
     try {
-      const sProxy = 'https://corsproxy.io/?' + encodeURIComponent(sitemapUrl);
-      const resp = await fetch(sProxy, { cache: 'no-cache' });
-      if (!resp.ok) continue;
-      const xml = await resp.text();
+      const xml = sitemapCache[sitemapUrl] || await fetchSitemapXml(sitemapUrl);
       if (!xml) continue;
       const parser = new DOMParser();
       const doc = parser.parseFromString(xml, 'text/xml');
@@ -3572,7 +3655,16 @@ async function refreshFromSitemapSilent() {
     if (added > 0) msg.push('added ' + added + ' new page' + (added > 1 ? 's' : ''));
     showToast('🔄 Sitemap refresh: ' + msg.join(', '));
   }
-  // Check for any newly published pages and notify Ray
+
+  // Surface total failure instead of failing silently — otherwise new-content
+  // detection quietly stops and nobody gets pinged
+  if (fetchFailures >= SITEMAPS.length) {
+    showToast('⚠️ Sitemap refresh failed — new-content detection is NOT updating. All CORS proxies unreachable.');
+    console.log('Sitemap refresh: all ' + SITEMAPS.length + ' sitemap fetches failed across all proxies.');
+    return; // don't run new-content check against stale data
+  }
+
+  // Check for any newly published pages and notify Ray + Korea team
   checkForNewContent();
 }
 
@@ -3590,10 +3682,8 @@ async function refreshFromSitemap() {
 
   for (const sitemapUrl of SITEMAPS) {
     try {
-      const resp = await fetch('https://corsproxy.io/?' + encodeURIComponent(sitemapUrl), { cache: 'no-cache' });
-      if (!resp.ok) throw new Error('proxy error');
-      const xml = await resp.text();
-      if (!xml) throw new Error('empty response');
+      const xml = await fetchSitemapXml(sitemapUrl);
+      if (!xml) throw new Error('all proxies failed');
 
       // Parse XML
       const parser = new DOMParser();
