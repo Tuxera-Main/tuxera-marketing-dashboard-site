@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tuxera — Marketing Inventory v47</title>
+<title>Tuxera — Marketing Inventory v48</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -804,7 +804,7 @@ td.url-cell {
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-logo">Tuxera<span>.</span></div>
-  <div class="topbar-sub">Marketing Inventory v47</div>
+  <div class="topbar-sub">Marketing Inventory v48</div>
   <div class="topbar-actions">
     <span id="sixsenseStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
     <span id="autoStatus" style="font-size:11px;color:rgba(255,255,255,.45);display:none"></span>
@@ -1093,12 +1093,11 @@ td.url-cell {
         <div style="font-size:11px;color:var(--ink3);margin-bottom:10px">When new content is detected on tuxera.com, an email is sent to the Korea team automatically via the Zapier hook (alert_type: new_content) so they can request translations here. Requires the dashboard to be open in someone's browser. Use the test button to verify the Zapier flow delivers it.</div>
         <button class="btn btn-outline" onclick="sendTestKoreaPing()">📧 Send test Korea ping</button>
       </div>
-      <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-top:8px">
-        <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:4px">📨 Ray Chen Teams DM (China)</div>
-        <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">Optional: paste the Power Automate flow URL that DMs Ray on Teams. Saved in this browser only.</div>
-        <input type="text" id="rayWebhookInput" class="drawer-input" placeholder="https://prod-xx.westeurope.logic.azure.com/..." style="width:100%;margin-bottom:8px">
-        <button class="btn btn-outline" onclick="saveRayWebhook(document.getElementById('rayWebhookInput').value.trim())">Save webhook</button>
-      </div>
+              <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-top:8px">
+                <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:4px">China team email ping</div>
+                <div style="font-size:11px;color:var(--ink3);margin-bottom:10px">When new content is detected on tuxera.com, an email goes to the China team so they can request a Chinese translation.</div>
+                <button class="btn btn-outline" onclick="sendTestChinaPing()">Send test China ping</button>
+              </div>
     </div>
 
     <div class="drawer-section">
@@ -2705,7 +2704,7 @@ function checkForNewContent() {
   if (newPages.length > 0) {
     saveKnownUrls();
     newPages.forEach(p => {
-      notifyRayNewContent(p);
+      notifyChinaNewContent(p);
       notifyKoreaNewContent(p);
     });
   } else {
@@ -2758,43 +2757,46 @@ function sendTestKoreaPing() {
   }, true);
 }
 
-async function notifyRayNewContent(p) {
-  const slug = p.url.split('/').filter(Boolean).pop() || p.url;
-  const section = p.section || 'Page';
+    // CHINA TEAM NEW CONTENT PING
+    // Emails the China team (via the existing Zapier hook) whenever new English
+    // content appears on tuxera.com, so they can request Chinese translations.
+    async function notifyChinaNewContent(p, isTest) {
+      const slug = p.url.split("/").filter(Boolean).pop() || p.url;
+      const readableTitle = decodeURIComponent(slug).replace(/-/g, " ").replace(/_/g, " ");
+      const section = p.section || "Page";
 
-  const payload = {
-    recipient_email: RAY_EMAIL,
-    page_title: slug,
-    page_section: section,
-    page_url: p.url,
-    published_date: p.lastmod || 'unknown'
-  };
+      const params = new URLSearchParams();
+      params.append("title", (isTest ? "[TEST] " : "") + readableTitle);
+      params.append("team", "China");
+      params.append("url", p.url);
+      params.append("message",
+        (isTest ? "THIS IS A TEST PING, no action needed. " : "")
+        + "New content published on tuxera.com (" + section + "): \"" + readableTitle + "\""
+        + (p.lastmod ? ", published " + p.lastmod : "")
+        + ". If this should be localised for China, please make a translation request in the Marketing Inventory dashboard: "
+        + DASHBOARD_URL);
+      params.append("alert_type", "new_content");
 
-  const rayWebhook = localStorage.getItem('tuxera_ray_webhook') || RAY_DM_WEBHOOK;
-  if (rayWebhook) {
-    // Use dedicated Power Automate flow for direct Teams message to Ray
-    try {
-      await fetch(rayWebhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      showToast('📨 Ray Chen notified directly on Teams: ' + slug);
-    } catch(e) {
-      console.log('Ray DM error:', e.message);
-      showToast('⚠️ Could not reach Ray DM webhook — check Power Automate flow');
+      try {
+        await fetch(TEAMS_WEBHOOK, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: params.toString()
+        });
+        showToast("China team notified of new content: " + readableTitle);
+      } catch(e) {
+        console.log("China ping error:", e.message);
+        showToast("Could not send China team ping, check Zapier webhook");
+      }
     }
-  } else {
-    // RAY_DM_WEBHOOK not set yet — show setup reminder
-    showToast('⚠️ New content detected (' + slug + ') but Ray DM webhook not set up yet. See Settings.');
-    console.log('New content detected:', p.url, '— set RAY_DM_WEBHOOK in settings to notify Ray');
-  }
-}
 
-function saveRayWebhook(url) {
-  localStorage.setItem('tuxera_ray_webhook', url);
-  showToast('Ray Teams webhook saved');
-}
+    function sendTestChinaPing() {
+      notifyChinaNewContent({
+        url: "https://www.tuxera.com/blog/test-china-ping/",
+        section: "Blog Posts",
+        lastmod: new Date().toISOString().slice(0, 10)
+      }, true);
+    }
 
 
 // ─── LOCALISATION ────────────────────────────────────────────
